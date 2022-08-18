@@ -28,7 +28,12 @@ func main() {
 	// importUndiksa(db, sf)
 	// importUnivGorontalo(db, sf)
 	// importUNS(db, sf)
-	exportXlsx(db, "Universitas Sebelas Maret")
+	// importUnm(db, sf)
+	// importUad(db, sf)
+	// importUnjem(db, sf)
+	// importUnbeng(db, sf)
+	// importAlmuslim(db, sf)
+	exportXlsx(db, "Universitas Al Muslim")
 	// vacuumTableRekening(db)
 }
 
@@ -50,15 +55,15 @@ var sqlInsertRekening = `INSERT INTO rekening (
 			_nominal,
 			_status
 		) VALUES (
-				?,
-				?,
-				?,
-				?,
-				?,
-				?,
-				?,
-				?,
-				?
+			?,
+			?,
+			?,
+			?,
+			?,
+			?,
+			?,
+			?,
+			?
 		)`
 
 func (h *colHeader) scan(xl *excelize.File, sheetName string, rowNum int) {
@@ -104,6 +109,10 @@ func (h *colHeader) scan(xl *excelize.File, sheetName string, rowNum int) {
 
 	for i, name := range cols {
 		origName := name
+		if strings.TrimSpace(origName)=="" {
+			fmt.Printf("nama kolom blank\n")
+			os.Exit(0)
+		}
 		if _, ok := h.reverse[origName]; ok {
 			fmt.Printf("nama kolom tidak unik: %s !\n", origName)
 			os.Exit(0)
@@ -569,7 +578,7 @@ func importUnesa(db *sql.DB, sf *sonyflake.Sonyflake) {
 				exit(err)
 			}
 			//profiling kolom no ukg posisi = 3 dari 0
-			if len(col) < 4 {
+			if len(col) < len(header._names) {
 				fmt.Println("break on empty rows")
 				break
 			}
@@ -669,7 +678,7 @@ func importUpi(db *sql.DB, sf *sonyflake.Sonyflake) {
 			exit(err)
 		}
 		//profiling kolom no ukg posisi = 3 dari 0
-		if len(col) < 4 {
+		if len(col) < len(header._names) {
 			fmt.Println("break on empty rows")
 			break
 		}
@@ -764,7 +773,7 @@ func importUnivGorontalo(db *sql.DB, sf *sonyflake.Sonyflake) {
 			exit(err)
 		}
 		//profiling kolom no ukg posisi = 3 dari 0
-		if len(col) < 4 {
+		if len(col) < len(header._names) {
 			fmt.Println("break on empty rows")
 			break
 		}
@@ -862,7 +871,7 @@ func importUndiksa(db *sql.DB, sf *sonyflake.Sonyflake) {
 			exit(err)
 		}
 		//profiling kolom no ukg posisi = 3 dari 0
-		if len(col) < 4 {
+		if len(col) < len(header._names) {
 			fmt.Println("break on empty rows")
 			break
 		}
@@ -881,6 +890,498 @@ func importUndiksa(db *sql.DB, sf *sonyflake.Sonyflake) {
 	}
 	fmt.Println("selesai proses baris")
 }
+
+func importUnm(db *sql.DB, sf *sonyflake.Sonyflake) {
+	xlFname := "input/Universitas Negeri Malang.xlsx"
+
+	_, err := os.Stat(xlFname)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println(`file excel "input.xlsx" tidak ditemukan!`)
+		}
+	}
+
+	xl, err := excelize.OpenFile(xlFname)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	defer func() {
+		if err := xl.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	sheetName := xl.WorkBook.Sheets.Sheet[0].Name
+	headerRowNum := 4
+	dataStartRowNum := 6
+
+	header := colHeader{}
+	header.scan(xl, sheetName, headerRowNum)
+	if header.names()[0] != "no" { // <=============== warning
+		fmt.Println("invalid header")
+		os.Exit(0)
+	}
+	// "nomor_ukg",
+	// "nomor_ktp",
+	// "nama_penerima_bantuan_pemerintah",
+	// "nama_universitas",
+	// "nama_bank",
+	// "nomor_rekening",
+	// "jumlah_bantuan_pemerintah_rp",
+	header.setNames(
+        "nomor_ukg",
+        "nomor_ktp",
+        "nama_penerima_bantuan_pemerintah",
+        "nama_universitas",
+        "nama_bank",
+        "nomor_rekening__va",
+        "jumlah_bantuan_pemerintah",
+	)
+
+	// header.printSqlCreate()
+	// header.printSqlInsert()
+	// header.printNames()
+
+	rows, err := xl.Rows(sheetName)
+	if err != nil {
+		exit(err)
+	}
+	defer rows.Close()
+	// skip header
+	dataStartRowNum-- //to rowIdx
+	for i := 0; i < dataStartRowNum; i++ {
+		if !rows.Next() {
+			fmt.Println("baris kosong!")
+			os.Exit(0)
+		}
+	}
+
+	stmt, err := db.Prepare(sqlInsertRekening)
+	if err != nil {
+		exit(err)
+	}
+
+	fmt.Println("mulai proses baris...")
+	for rows.Next() {
+		col, err := rows.Columns()
+		fmt.Println(col)
+		if err != nil {
+			exit(err)
+		}
+		//profiling kolom no ukg posisi = 3 dari 0
+		if len(col) < len(header._names) {
+			fmt.Println("break on empty rows")
+			break
+		}
+		var id uint64
+		if id, err = sf.NextID(); err != nil {
+			exit(err)
+		}
+
+		args := header.values(id, col) // hack
+		args = append(args, "")
+
+		if _, err = stmt.Exec(args...); err != nil {
+			exit(err)
+		}
+
+	}
+	fmt.Println("selesai proses baris")
+}
+
+func importUad(db *sql.DB, sf *sonyflake.Sonyflake) {
+	xlFname := "input/Universitas Ahmad Dahlan.xlsx"
+
+	_, err := os.Stat(xlFname)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println(`file excel "input.xlsx" tidak ditemukan!`)
+		}
+	}
+
+	xl, err := excelize.OpenFile(xlFname)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	defer func() {
+		if err := xl.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	sheetName := xl.WorkBook.Sheets.Sheet[0].Name
+	headerRowNum := 1
+	dataStartRowNum := 2
+
+	header := colHeader{}
+	header.scan(xl, sheetName, headerRowNum)
+	if header.names()[0] != "no" { // <=============== warning
+		fmt.Println("invalid header")
+		os.Exit(0)
+	}
+	// "nomor_ukg",
+	// "nomor_ktp",
+	// "nama_penerima_bantuan_pemerintah",
+	// "nama_universitas",
+	// "nama_bank",
+	// "nomor_rekening",
+	// "jumlah_bantuan_pemerintah_rp",
+	header.setNames(
+        "no_ukg",
+        "no_ktp",
+		"nama_penerima_bantuan_pemerintah",
+        "nama_universitas",
+        "nama_bank",
+        "nomor_rekening_virtual_account",
+        "jumlah_bantuan_pemerintah_rp",
+	)
+
+	// header.printSqlCreate()
+	// header.printSqlInsert()
+	// header.printNames()
+
+	rows, err := xl.Rows(sheetName)
+	if err != nil {
+		exit(err)
+	}
+	defer rows.Close()
+	// skip header
+	dataStartRowNum-- //to rowIdx
+	for i := 0; i < dataStartRowNum; i++ {
+		if !rows.Next() {
+			fmt.Println("baris kosong!")
+			os.Exit(0)
+		}
+	}
+
+	stmt, err := db.Prepare(sqlInsertRekening)
+	if err != nil {
+		exit(err)
+	}
+
+	fmt.Println("mulai proses baris...")
+	for rows.Next() {
+		col, err := rows.Columns()
+		fmt.Println(col)
+		if err != nil {
+			exit(err)
+		}
+		//profiling kolom no ukg posisi = 3 dari 0
+		if len(col) < len(header._names) {
+			fmt.Println("break on empty rows")
+			break
+		}
+		var id uint64
+		if id, err = sf.NextID(); err != nil {
+			exit(err)
+		}
+
+		args := header.values(id, col) // hack
+		args = append(args, "")
+
+		if _, err = stmt.Exec(args...); err != nil {
+			exit(err)
+		}
+
+	}
+	fmt.Println("selesai proses baris")
+}
+
+func importUnjem(db *sql.DB, sf *sonyflake.Sonyflake) {
+	xlFname := "input/UNIVERSITAS JEMBER.xlsx"
+
+	_, err := os.Stat(xlFname)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println(`file excel "input.xlsx" tidak ditemukan!`)
+		}
+	}
+
+	xl, err := excelize.OpenFile(xlFname)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	defer func() {
+		if err := xl.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	sheetName := xl.WorkBook.Sheets.Sheet[0].Name
+	headerRowNum := 2
+	dataStartRowNum := 3
+
+	header := colHeader{}
+	header.scan(xl, sheetName, headerRowNum)
+	if header.names()[0] != "no" { // <=============== warning
+		fmt.Println("invalid header")
+		os.Exit(0)
+	}
+	// "nomor_ukg",
+	// "nomor_ktp",
+	// "nama_penerima_bantuan_pemerintah",
+	// "nama_universitas",
+	// "nama_bank",
+	// "nomor_rekening",
+	// "jumlah_bantuan_pemerintah_rp",
+	header.setNames(
+        "no_ukg",
+        "nik",
+        "nama_penerima_banpem",
+        "nama_universitas",
+        "nama_bank",
+        "no_rekening",
+        "jumlah_banpem_rp",
+	)
+
+	// header.printSqlCreate()
+	// header.printSqlInsert()
+	// header.printNames()
+
+	rows, err := xl.Rows(sheetName)
+	if err != nil {
+		exit(err)
+	}
+	defer rows.Close()
+	// skip header
+	dataStartRowNum-- //to rowIdx
+	for i := 0; i < dataStartRowNum; i++ {
+		if !rows.Next() {
+			fmt.Println("baris kosong!")
+			os.Exit(0)
+		}
+	}
+
+	stmt, err := db.Prepare(sqlInsertRekening)
+	if err != nil {
+		exit(err)
+	}
+
+	fmt.Println("mulai proses baris...")
+	for rows.Next() {
+		col, err := rows.Columns()
+		fmt.Println(col)
+		if err != nil {
+			exit(err)
+		}
+		//profiling kolom no ukg posisi = 3 dari 0
+		if len(col) < len(header._names) {
+			fmt.Println("break on empty rows")
+			break
+		}
+		var id uint64
+		if id, err = sf.NextID(); err != nil {
+			exit(err)
+		}
+
+		args := header.values(id, col) // hack
+		args = append(args, "")
+
+		if _, err = stmt.Exec(args...); err != nil {
+			exit(err)
+		}
+
+	}
+	fmt.Println("selesai proses baris")
+}
+
+func importUnbeng(db *sql.DB, sf *sonyflake.Sonyflake) {
+	xlFname := "input/Universitas Bengkulu.xlsx"
+
+	_, err := os.Stat(xlFname)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println(`file excel "input.xlsx" tidak ditemukan!`)
+		}
+	}
+
+	xl, err := excelize.OpenFile(xlFname)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	defer func() {
+		if err := xl.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	sheetName := xl.WorkBook.Sheets.Sheet[0].Name
+	headerRowNum := 3
+	dataStartRowNum := 4
+
+	header := colHeader{}
+	header.scan(xl, sheetName, headerRowNum)
+	if header.names()[0] != "no" { // <=============== warning
+		fmt.Println("invalid header")
+		os.Exit(0)
+	}
+	// "nomor_ukg",
+	// "nomor_ktp",
+	// "nama_penerima_bantuan_pemerintah",
+	// "nama_universitas",
+	// "nama_bank",
+	// "nomor_rekening",
+	// "jumlah_bantuan_pemerintah_rp",
+	header.setNames(
+        "no_ukg",
+        "no_ktp",
+        "nama_penerima_bantuan",
+        "nama_universitas",
+        "nama_bank",
+        "no_virtual_account",
+        "jumlah_bantuan_pemerintah__rp",
+	)
+
+	// header.printSqlCreate()
+	// header.printSqlInsert()
+	// header.printNames()
+
+	rows, err := xl.Rows(sheetName)
+	if err != nil {
+		exit(err)
+	}
+	defer rows.Close()
+	// skip header
+	dataStartRowNum-- //to rowIdx
+	for i := 0; i < dataStartRowNum; i++ {
+		if !rows.Next() {
+			fmt.Println("baris kosong!")
+			os.Exit(0)
+		}
+	}
+
+	stmt, err := db.Prepare(sqlInsertRekening)
+	if err != nil {
+		exit(err)
+	}
+
+	fmt.Println("mulai proses baris...")
+	for rows.Next() {
+		col, err := rows.Columns()
+		fmt.Println(col)
+		if err != nil {
+			exit(err)
+		}
+		//profiling kolom no ukg posisi = 3 dari 0
+		if len(col) < len(header._names) {
+			fmt.Println("break on empty rows")
+			break
+		}
+		var id uint64
+		if id, err = sf.NextID(); err != nil {
+			exit(err)
+		}
+
+		args := header.values(id, col) // hack
+		args = append(args, "")
+
+		if _, err = stmt.Exec(args...); err != nil {
+			exit(err)
+		}
+
+	}
+	fmt.Println("selesai proses baris")
+}
+
+func importAlmuslim(db *sql.DB, sf *sonyflake.Sonyflake) {
+	xlFname := "input/Universitas Al Muslim.xlsx"
+
+	_, err := os.Stat(xlFname)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println(`file excel "input.xlsx" tidak ditemukan!`)
+		}
+	}
+
+	xl, err := excelize.OpenFile(xlFname)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	defer func() {
+		if err := xl.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	sheetName := xl.WorkBook.Sheets.Sheet[0].Name
+	headerRowNum := 1
+	dataStartRowNum := 2
+
+	header := colHeader{}
+	header.scan(xl, sheetName, headerRowNum)
+	if header.names()[0] != "no" { // <=============== warning
+		fmt.Println("invalid header")
+		os.Exit(0)
+	}
+	// "nomor_ukg",
+	// "nomor_ktp",
+	// "nama_penerima_bantuan_pemerintah",
+	// "nama_universitas",
+	// "nama_bank",
+	// "nomor_rekening",
+	// "jumlah_bantuan_pemerintah_rp",
+	header.setNames(
+        "nomor_ukg",
+        "nomor_ktp",
+        "nama_penerima_bantuan_pemerintah",
+        "nama_universitas",
+        "nama_bank",
+        "nomor_rekening",
+        "jumlah_bantuan_pemerintah_rp",
+	)
+
+	// header.printSqlCreate()
+	// header.printSqlInsert()
+	// header.printNames()
+
+	rows, err := xl.Rows(sheetName)
+	if err != nil {
+		exit(err)
+	}
+	defer rows.Close()
+	// skip header
+	dataStartRowNum-- //to rowIdx
+	for i := 0; i < dataStartRowNum; i++ {
+		if !rows.Next() {
+			fmt.Println("baris kosong!")
+			os.Exit(0)
+		}
+	}
+
+	stmt, err := db.Prepare(sqlInsertRekening)
+	if err != nil {
+		exit(err)
+	}
+
+	fmt.Println("mulai proses baris...")
+	for rows.Next() {
+		col, err := rows.Columns()
+		fmt.Println(col)
+		if err != nil {
+			exit(err)
+		}
+		//profiling kolom no ukg posisi = 3 dari 0
+		if len(col) < len(header._names) {
+			fmt.Println("break on empty rows")
+			break
+		}
+		var id uint64
+		if id, err = sf.NextID(); err != nil {
+			exit(err)
+		}
+
+		args := header.values(id, col) // hack
+		args = append(args, "")
+
+		if _, err = stmt.Exec(args...); err != nil {
+			exit(err)
+		}
+
+	}
+	fmt.Println("selesai proses baris")
+}
+
+//===
 
 func importUNS(db *sql.DB, sf *sonyflake.Sonyflake) {
 	xlFname := "input/Universitas Sebelas Maret.xlsx"
@@ -955,15 +1456,15 @@ func importUNS(db *sql.DB, sf *sonyflake.Sonyflake) {
 		_nominal,
 		_status
 	) VALUES (
-			?,
-			?,
-			"",
-			?,
-			"Universitas Sebelas Maret",
-			?,
-			?,
-			0,
-			?
+		?,
+		?,
+		"",
+		?,
+		"Universitas Sebelas Maret",
+		?,
+		?,
+		0,
+		?
 	)`
 
 	stmt, err := db.Prepare(sqlInsertRekening)
@@ -979,7 +1480,7 @@ func importUNS(db *sql.DB, sf *sonyflake.Sonyflake) {
 			exit(err)
 		}
 		//profiling kolom no ukg posisi = 3 dari 0
-		if len(col) < 4 {
+		if len(col) < len(header._names) {
 			fmt.Println("break on empty rows")
 			break
 		}
